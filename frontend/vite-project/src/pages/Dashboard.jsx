@@ -26,27 +26,19 @@ const CustomTooltip = ({ active, payload, label, isDark }) => {
         borderRadius: 12, padding: "0.85rem 1.1rem",
         boxShadow: "0 12px 32px rgba(0,0,0,0.25)",
         fontFamily: "'DM Sans', sans-serif",
-        minWidth: 170,
+        minWidth: 180,
       }}>
         <p style={{ fontSize: "0.7rem", opacity: 0.45, marginBottom: "0.6rem", letterSpacing: "0.08em", textTransform: "uppercase", color: isDark ? "#f0ede8" : "#1a1814" }}>
-          Test #{label}
+          {point.name || `Mock #${label}`}
         </p>
-        {Object.entries(SKILL_META).map(([, meta]) => (
-          point[meta.label] != null && (
-            <div key={meta.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", marginBottom: "0.25rem" }}>
-              <span style={{ fontSize: "0.78rem", color: meta.color }}>{meta.icon} {meta.label}</span>
-              <span style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: "0.95rem", color: meta.color }}>
-                {point[meta.label].toFixed(1)}
-              </span>
-            </div>
-          )
-        ))}
-        {point.overall != null && (
-          <div style={{ borderTop: "1px solid rgba(232,184,109,0.2)", marginTop: "0.5rem", paddingTop: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.82rem", color: "#e8b86d", fontWeight: 500 }}>⭐ Overall</span>
-            <span style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: "1.2rem", color: "#e8b86d" }}>
-              {point.overall.toFixed(1)}
-            </span>
+        {point.reading   != null && <div style={{ display:"flex", justifyContent:"space-between", gap:"1rem", marginBottom:"0.2rem" }}><span style={{ fontSize:"0.78rem", color:"#e8b86d" }}>📖 Reading</span>  <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:700, color:"#e8b86d"  }}>{point.reading.toFixed(1)}</span></div>}
+        {point.listening != null && <div style={{ display:"flex", justifyContent:"space-between", gap:"1rem", marginBottom:"0.2rem" }}><span style={{ fontSize:"0.78rem", color:"#7eb8f7" }}>🎧 Listening</span><span style={{ fontFamily:"'Playfair Display',serif", fontWeight:700, color:"#7eb8f7"  }}>{point.listening.toFixed(1)}</span></div>}
+        {point.writing   != null && <div style={{ display:"flex", justifyContent:"space-between", gap:"1rem", marginBottom:"0.2rem" }}><span style={{ fontSize:"0.78rem", color:"#b68df5" }}>✍️ Writing</span>  <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:700, color:"#b68df5"  }}>{point.writing.toFixed(1)}</span></div>}
+        {point.speaking  != null && <div style={{ display:"flex", justifyContent:"space-between", gap:"1rem", marginBottom:"0.2rem" }}><span style={{ fontSize:"0.78rem", color:"#6debb0" }}>🎤 Speaking</span> <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:700, color:"#6debb0"  }}>{point.speaking.toFixed(1)}</span></div>}
+        {point.overall   != null && (
+          <div style={{ borderTop:"1px solid rgba(232,184,109,0.2)", marginTop:"0.5rem", paddingTop:"0.5rem", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <span style={{ fontSize:"0.82rem", color:"#e8b86d", fontWeight:500 }}>⭐ Overall</span>
+            <span style={{ fontFamily:"'Playfair Display',serif", fontWeight:700, fontSize:"1.2rem", color:"#e8b86d" }}>{point.overall.toFixed(1)}</span>
           </div>
         )}
       </div>
@@ -75,9 +67,10 @@ function AnimatedNumber({ value }) {
 }
 
 export default function Dashboard() {
-  const [data, setData]               = useState(null);
-  const [trendData, setTrendData]     = useState([]);
-  const [targetInput, setTargetInput] = useState("");
+  const [data, setData]                   = useState(null);
+  const [trendData, setTrendData]         = useState([]);
+  const [fullMockTrend, setFullMockTrend] = useState([]);
+  const [targetInput, setTargetInput]     = useState("");
   const [editingTarget, setEditingTarget] = useState(false);
   const [savingTarget, setSavingTarget]   = useState(false);
   const [targetError, setTargetError]     = useState("");
@@ -94,79 +87,67 @@ export default function Dashboard() {
   const loadTrendData = async () => {
     const skills = ["reading", "listening", "writing", "speaking"];
     const allTests = {};
-
     await Promise.all(skills.map(async (skill) => {
       try {
         const res = await api.get(`/tests/${skill}`);
         allTests[skill] = [...res.data].reverse();
-      } catch {
-        allTests[skill] = [];
-      }
+      } catch { allTests[skill] = []; }
     }));
-
     const maxLen = Math.max(...skills.map(s => allTests[s].length), 0);
     const points = [];
-
     for (let i = 0; i < maxLen; i++) {
       const point = { test: i + 1 };
-      const presentScores = [];
-
       skills.forEach(skill => {
         const t = allTests[skill][i];
-        if (t) {
-          point[SKILL_META[skill].label] = t.bandScore;
-          presentScores.push(t.bandScore);
-        }
+        if (t) point[SKILL_META[skill].label] = t.bandScore;
       });
-
-      if (presentScores.length === 4) {
-        point.overall = roundIELTS(presentScores.reduce((a, b) => a + b, 0) / 4);
-      }
-
       points.push(point);
     }
-
     setTrendData(points);
+  };
+
+  const loadFullMockTrend = async () => {
+    try {
+      const res = await api.get("/tests/full");
+      const sorted = [...res.data].reverse();
+      setFullMockTrend(sorted.map((t, i) => ({
+        mock:      i + 1,
+        overall:   t.bandScore,
+        reading:   t.fullScores?.reading,
+        listening: t.fullScores?.listening,
+        writing:   t.fullScores?.writing,
+        speaking:  t.fullScores?.speaking,
+        name:      t.mockName || `Mock ${i + 1}`,
+      })));
+    } catch { setFullMockTrend([]); }
   };
 
   useEffect(() => {
     loadDashboard();
     loadTrendData();
+    loadFullMockTrend();
   }, []);
 
   const saveTarget = async () => {
     const val = parseFloat(targetInput);
     if (isNaN(val) || val < 0 || val > 9 || val * 2 !== Math.floor(val * 2)) {
-      setTargetError("Must be 0–9 in 0.5 steps");
-      return;
+      setTargetError("Must be 0–9 in 0.5 steps"); return;
     }
-    setSavingTarget(true);
-    setTargetError("");
+    setSavingTarget(true); setTargetError("");
     try {
       await api.patch("/auth/target", { targetBand: val });
       await loadDashboard();
       setEditingTarget(false);
-    } catch {
-      setTargetError("Failed to save");
-    } finally {
-      setSavingTarget(false);
-    }
+    } catch { setTargetError("Failed to save"); }
+    finally { setSavingTarget(false); }
   };
 
   const makeMiniTooltip = (meta) => ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
     return (
-      <div style={{
-        background: isDark ? "rgba(16,16,22,0.97)" : "rgba(255,255,255,0.97)",
-        border: `1px solid ${meta.color}55`,
-        borderRadius: 8, padding: "0.5rem 0.75rem",
-        fontFamily: "'DM Sans', sans-serif",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-      }}>
+      <div style={{ background: isDark ? "rgba(16,16,22,0.97)" : "rgba(255,255,255,0.97)", border: `1px solid ${meta.color}55`, borderRadius: 8, padding: "0.5rem 0.75rem", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }}>
         <p style={{ fontSize: "0.68rem", opacity: 0.4, marginBottom: "0.2rem", color: isDark ? "#f0ede8" : "#1a1814" }}>Test #{label}</p>
-        <p style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: "1.1rem", color: meta.color, margin: 0 }}>
-          {payload[0].value?.toFixed(1)}
-        </p>
+        <p style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: "1.1rem", color: meta.color, margin: 0 }}>{payload[0].value?.toFixed(1)}</p>
       </div>
     );
   };
@@ -205,28 +186,21 @@ export default function Dashboard() {
 
         /* GREETING */
         .greeting { animation: fadeUp 0.5s ease both; }
-        .greeting-eyebrow { 
-  font-size: 0.78rem; 
-  letter-spacing: 0.15em; 
-  text-transform: uppercase; 
-  opacity: 0.45; 
-  margin-bottom: 0.6rem; 
-  font-weight: 500; 
-}
-.greeting-name { 
-  display: block;
-  font-family: 'Playfair Display', serif;
-  font-size: clamp(2.2rem, 5vw, 3.5rem);
-  font-weight: 900;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  color: #e8b86d;
-  opacity: 1;
-  text-transform: none;
-  margin: 0.3rem 0 0.5rem;
-}
-        .greeting-title { font-family: 'Playfair Display', serif; font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 900; letter-spacing: -0.03em; line-height: 1.05; }
-        .greeting-title em { font-style: italic; opacity: 0.4; }
+        .greeting-eyebrow { font-size: 0.72rem; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.4; margin-bottom: 0.4rem; font-weight: 500; }
+        .greeting-name {
+          display: block;
+          font-family: 'Playfair Display', serif;
+          font-size: clamp(3rem, 7vw, 5rem);
+          font-weight: 900;
+          letter-spacing: -0.03em;
+          line-height: 1;
+          background: linear-gradient(120deg, #e8b86d 0%, #f7dfa0 45%, #c8822a 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          margin: 0.15rem 0 0.5rem;
+        }
+        .greeting-sub { font-size: 0.88rem; opacity: 0.35; font-weight: 400; margin: 0; letter-spacing: 0.01em; }
 
         /* HERO ROW */
         .hero-row { display: grid; grid-template-columns: 1fr 2fr; gap: 1.25rem; animation: fadeUp 0.55s ease 0.08s both; }
@@ -266,7 +240,7 @@ export default function Dashboard() {
         /* SKILL GRID */
         .skill-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
         @media (max-width: 500px) { .skill-grid { grid-template-columns: 1fr; } }
-        .skill-card { border-radius: 16px; border: 1px solid; padding: 1.25rem 1.4rem; transition: transform 0.18s; position: relative; overflow: hidden; }
+        .skill-card { border-radius: 16px; border: 1px solid; padding: 1.25rem 1.4rem; transition: transform 0.18s; position: relative; overflow: hidden; animation: fadeUp 0.4s ease both; }
         .skill-card:hover { transform: translateY(-2px); }
         .dark  .skill-card { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); }
         .light .skill-card { background: #ffffff; border-color: rgba(0,0,0,0.13); box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
@@ -285,11 +259,9 @@ export default function Dashboard() {
         .chart-section-sub   { font-size: 0.8rem; opacity: 0.5; font-weight: 400; margin: 0 0 1.25rem; }
         .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem; margin-bottom: 1.25rem; }
         @media (max-width: 600px) { .charts-grid { grid-template-columns: 1fr; } }
-
         .chart-card { border-radius: 18px; border: 1px solid; padding: 1.25rem 1.4rem; animation: fadeUp 0.4s ease both; }
         .dark  .chart-card { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.07); }
         .light .chart-card { background: #ffffff; border-color: rgba(0,0,0,0.13); box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-
         .chart-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.85rem; }
         .chart-card-label  { font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; margin: 0 0 0.1rem; }
         .chart-card-latest { font-family: 'Playfair Display', serif; font-size: 1.4rem; font-weight: 700; line-height: 1; }
@@ -333,10 +305,10 @@ export default function Dashboard() {
 
             {/* Greeting */}
             <div className="greeting">
-  <p className="greeting-eyebrow">Welcome</p>
-  <span className="greeting-name">{data.name || data.email?.split("@")[0]}</span>
-  <h1 className="greeting-title">Records<br /><em>below.</em></h1>
-</div>
+              <p className="greeting-eyebrow">Welcome back</p>
+              <span className="greeting-name">{data.name || data.email?.split("@")[0]}</span>
+              <p className="greeting-sub">Here's your IELTS progress at a glance.</p>
+            </div>
 
             {/* Hero Row */}
             <div className="hero-row">
@@ -405,24 +377,21 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* ── PROGRESS CHARTS ── */}
+            {/* ── SECTION PROGRESS CHARTS ── */}
             <div>
-              <h2 className="chart-section-title">Progress Over Time</h2>
-              <p className="chart-section-sub">Each point = your Nth test for that section</p>
+              <h2 className="chart-section-title">Section Progress</h2>
+              <p className="chart-section-sub">Each point = your Nth individual section test</p>
 
               <div className="charts-grid">
                 {Object.entries(SKILL_META).map(([skill, meta]) => {
                   const skillData = trendData.map(p => ({ test: p.test, score: p[meta.label] ?? null }));
                   const hasData = skillData.some(p => p.score != null);
                   const latest = hasData ? skillData.filter(p => p.score != null).slice(-1)[0]?.score : null;
-
                   return (
                     <div key={skill} className="chart-card">
                       <div className="chart-card-header">
                         <p className="chart-card-label" style={{ color: meta.color }}>{meta.icon} {meta.label}</p>
-                        {latest != null && (
-                          <span className="chart-card-latest" style={{ color: meta.color }}>{latest.toFixed(1)}</span>
-                        )}
+                        {latest != null && <span className="chart-card-latest" style={{ color: meta.color }}>{latest.toFixed(1)}</span>}
                       </div>
                       {!hasData ? (
                         <div className="chart-empty" style={{ height: 130 }}>No tests yet</div>
@@ -431,10 +400,8 @@ export default function Dashboard() {
                           <ResponsiveContainer>
                             <LineChart data={skillData} margin={{ top: 5, right: 8, left: -28, bottom: 0 }}>
                               <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.1)"} vertical={false} />
-                              <XAxis dataKey="test" axisLine={false} tickLine={false}
-                                tick={{ fontSize: 9, fill: isDark ? "rgba(240,237,232,0.3)" : "rgba(26,24,20,0.5)", fontFamily: "'DM Sans', sans-serif" }} />
-                              <YAxis domain={[0, 9]} ticks={[0, 3, 6, 9]} axisLine={false} tickLine={false}
-                                tick={{ fontSize: 9, fill: isDark ? "rgba(240,237,232,0.3)" : "rgba(26,24,20,0.5)", fontFamily: "'DM Sans', sans-serif" }} />
+                              <XAxis dataKey="test" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: isDark ? "rgba(240,237,232,0.3)" : "rgba(26,24,20,0.5)", fontFamily: "'DM Sans', sans-serif" }} />
+                              <YAxis domain={[0, 9]} ticks={[0, 3, 6, 9]} axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: isDark ? "rgba(240,237,232,0.3)" : "rgba(26,24,20,0.5)", fontFamily: "'DM Sans', sans-serif" }} />
                               <ReferenceLine y={data.targetBand || 8} stroke="#f87171" strokeDasharray="4 3" strokeWidth={1} strokeOpacity={0.5} />
                               <Tooltip content={makeMiniTooltip(meta)} />
                               <Line type="linear" dataKey="score" stroke={meta.color} strokeWidth={2.5}
@@ -450,34 +417,35 @@ export default function Dashboard() {
                 })}
               </div>
 
-              {/* Overall chart — full width */}
+              {/* ── FULL MOCK TREND CHART ── */}
               <div className="chart-card">
                 <div className="chart-card-header">
                   <div>
-                    <p className="chart-card-label" style={{ color: "#e8b86d" }}>⭐ Overall Band</p>
+                    <p className="chart-card-label" style={{ color: "#e8b86d" }}>⭐ Full Mock — Overall Band Trend</p>
                     <p style={{ fontSize: "0.74rem", opacity: 0.32, fontWeight: 300, margin: "0.15rem 0 0" }}>
-                      IELTS-rounded avg · only shown when all 4 sections are present
+                      IELTS-rounded score from each full length mock · hover to see all 4 sections
                     </p>
                   </div>
-                  {trendData.some(p => p.overall != null) && (
+                  {fullMockTrend.length > 0 && (
                     <span className="chart-card-latest" style={{ color: "#e8b86d", fontSize: "1.5rem" }}>
-                      {trendData.filter(p => p.overall != null).slice(-1)[0]?.overall?.toFixed(1)}
+                      {fullMockTrend[fullMockTrend.length - 1]?.overall?.toFixed(1)}
                     </span>
                   )}
                 </div>
 
-                {!trendData.some(p => p.overall != null) ? (
-                  <div className="chart-empty" style={{ height: 160, flexDirection: "column", gap: "0.4rem", display: "flex" }}>
-                    <span style={{ fontSize: "1.4rem" }}>📈</span>
-                    <span>Add all 4 sections for the same test number to see overall trend</span>
+                {fullMockTrend.length === 0 ? (
+                  <div className="chart-empty" style={{ height: 180, flexDirection: "column", gap: "0.5rem", display: "flex" }}>
+                    <span style={{ fontSize: "1.6rem" }}>📋</span>
+                    <span>No full mock tests yet — add one via + Add Mock</span>
                   </div>
                 ) : (
-                  <div style={{ width: "100%", height: 200 }}>
+                  <div style={{ width: "100%", height: 220 }}>
                     <ResponsiveContainer>
-                      <LineChart data={trendData} margin={{ top: 5, right: 12, left: -28, bottom: 0 }}>
+                      <LineChart data={fullMockTrend} margin={{ top: 5, right: 12, left: -28, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.1)"} vertical={false} />
-                        <XAxis dataKey="test" axisLine={false} tickLine={false}
-                          tick={{ fontSize: 10, fill: isDark ? "rgba(240,237,232,0.35)" : "rgba(26,24,20,0.5)", fontFamily: "'DM Sans', sans-serif" }} />
+                        <XAxis dataKey="mock" axisLine={false} tickLine={false}
+                          tick={{ fontSize: 10, fill: isDark ? "rgba(240,237,232,0.35)" : "rgba(26,24,20,0.5)", fontFamily: "'DM Sans', sans-serif" }}
+                          tickFormatter={(v) => `Mock ${v}`} />
                         <YAxis domain={[0, 9]} ticks={[0, 3, 6, 9]} axisLine={false} tickLine={false}
                           tick={{ fontSize: 10, fill: isDark ? "rgba(240,237,232,0.35)" : "rgba(26,24,20,0.5)", fontFamily: "'DM Sans', sans-serif" }} />
                         <ReferenceLine y={data.targetBand || 8} stroke="#f87171" strokeDasharray="6 4" strokeWidth={1.5} strokeOpacity={0.6}
